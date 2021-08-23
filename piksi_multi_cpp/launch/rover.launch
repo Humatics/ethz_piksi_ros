@@ -1,6 +1,7 @@
 <launch>
+  <include file="$(find message_converter)/launch/conv_node.launch" />
   <arg name="ns" default="rover" />
-  <arg name="device_ids" default="usb://*;tcp://piksi:55555"/> <!-- E.g. "usb://*;tcp://192.168.222.0:55555;serial:///dev/ttyS5@115200" -->
+  <arg name="device_ids" default="tcp://192.168.5.223:55555"/> 
 
   <!-- The next line allows you to set a predefined ENU frame. -->
   <!--rosparam file="$(find piksi_multi_cpp)/cfg/enu_origin.yaml" /-->

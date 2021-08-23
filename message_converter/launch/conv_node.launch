@@ -1,0 +1,4 @@
+<launch>
+  <node name="rover" pkg="message_converter" type="converter" output="log" required="true" />
+</launch>
+

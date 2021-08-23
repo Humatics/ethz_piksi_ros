@@ -28,9 +28,9 @@ std::shared_ptr<UDPObservationSender> UDPObservationSender::toNetwork(
 
   // set interface name
   std::string interface_name_delimited(interface_name);
+  unsigned long comp_op = ((IFNAMSIZ) <= (interface_name_delimited.size() + 1) ? (IFNAMSIZ) : (interface_name_delimited.size() + 1));
   strncpy(
-      ifr.ifr_name, interface_name_delimited.c_str(),
-      std::min((unsigned long)(IFNAMSIZ), interface_name_delimited.size() + 1));
+      ifr.ifr_name, interface_name_delimited.c_str(), comp_op);
 
   // check if interface exists
   if (ioctl(fd, SIOCGIFFLAGS, &ifr) < 0) {
