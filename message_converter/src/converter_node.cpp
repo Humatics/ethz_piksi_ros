@@ -36,6 +36,9 @@ void SwiftNavRover::init()
 {
     vel_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this);
     pos_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);
+    ned_point_fix = nh.advertise<geometry_msgs::PointStamped>("/rover/ned_point_fix", 1000);
+    ned_baseline_position_fix = nh.advertise<gnss_msgs::BaselinePosition>("/rover/ned_baseline_position_fix", 1000);
+    ned_vel_cov_fix = nh.advertise<gnss_msgs::BaselineVelocity>("/rover/ned_vel_cov_fix", 1000);
 }
 
 void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg)
@@ -82,7 +85,6 @@ void SwiftNavRover::publishBaselinePosition(ros::Time t,float n,float e,float d,
     msgPointStamped.point.x = n;
     msgPointStamped.point.y = e;
     msgPointStamped.point.z = d;
-    ned_point_fix = nh.advertise<geometry_msgs::PointStamped>("/rover/ned_point_fix", 1000);
     ned_point_fix.publish(msgPointStamped);
     gnss_msgs::BaselinePosition msg;
     msg.header.frame_id = "ned";
@@ -94,7 +96,6 @@ void SwiftNavRover::publishBaselinePosition(ros::Time t,float n,float e,float d,
     msg.n_sats = n_sats;
     msg.covariance = covariance;
     msg.mode = fixed_mode;
-    ned_baseline_position_fix = nh.advertise<gnss_msgs::BaselinePosition>("/rover/ned_baseline_position_fix", 1000);
     ned_baseline_position_fix.publish(msg);
 }
 
@@ -111,7 +112,6 @@ void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,float n,float e
     msg.covariance = covariance;
     msg.vel_mode = vel_mode;
     msg.ins_mode = ins_mode;
-    ned_vel_cov_fix = nh.advertise<gnss_msgs::BaselineVelocity>("/rover/ned_vel_cov_fix", 1000);
     ned_vel_cov_fix.publish(msg);
 }
 
