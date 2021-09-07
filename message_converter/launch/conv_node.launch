@@ -1,4 +1,8 @@
+<?xml version="1.0"?>
 <launch>
-  <node name="rover" pkg="message_converter" type="converter" output="log" required="true" />
+  <node name="rover" pkg="message_converter" type="converter" output="log" required="true" >
+    <!-- <rosparam param="/home_latitude">42.3711071377</rosparam> -->
+    <!-- <rosparam param="/home_longitude">-71.2168400352</rosparam> -->
+    <!-- <rosparam param="/home_altitude">-15.3775837652</rosparam> -->
+  </node>
 </launch>
-
