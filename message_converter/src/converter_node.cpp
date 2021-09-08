@@ -70,7 +70,7 @@ public:
 };
 
 SwiftNavRover::SwiftNavRover(ros::NodeHandle* node_handle, double hla = 0.0, double hlo = 0.0, double hal = 0.0):nh(*node_handle), 
-home_lat(hla), home_lon(hlo), home_alt(hal{
+home_lat(hla), home_lon(hlo), home_alt(hal){
     SwiftNavRover::init();
     SwiftNavRover::home_lon_rad = SwiftNavRover::deg2rad(home_lon);
     SwiftNavRover::home_lat_rad = SwiftNavRover::deg2rad(home_lat);
@@ -158,7 +158,7 @@ void SwiftNavRover::posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & 
     }    
 }
 
-void SwiftNavRover::publishBaselinePosition(ros::Time t,float n,float e,float d,int tow,boost::array<double, 9> covariance,int n_sats,int fixed_mode)
+void SwiftNavRover::publishBaselinePosition(ros::Time t,double n,double e,double d,int tow,boost::array<double, 9> covariance,int n_sats,int fixed_mode)
 {
     geometry_msgs::PointStamped msgPointStamped;
     msgPointStamped.header.frame_id = "ned";
@@ -180,7 +180,7 @@ void SwiftNavRover::publishBaselinePosition(ros::Time t,float n,float e,float d,
     ned_baseline_position_fix.publish(msg);
 }
 
-void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,float n,float e,float d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode)
+void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode)
 {
     gnss_msgs::BaselineVelocity msg;
     msg.header.frame_id = "ned";
