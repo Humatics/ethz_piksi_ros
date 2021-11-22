@@ -1,73 +1,4 @@
-// #include </home/ssonawane/Desktop/catkin_ws/src/ethz_piksi_ros/message_converter/include/message_converter/converter_node.hpp>
-#include "ros/ros.h"
-#include <ros/console.h>
-#include <boost/array.hpp>
-#include <geometry_msgs/PointStamped.h>
-#include <gnss_msgs/BaselinePosition.h>
-#include <gnss_msgs/BaselineVelocity.h>
-#include <geometry_msgs/PointStamped.h>
-#include <piksi_rtk_msgs/BaselineNed.h>
-#include <piksi_rtk_msgs/VelNedCov.h>
-#include <libsbp_ros_msgs/MsgBaselineNed.h>
-#include <libsbp_ros_msgs/MsgVelNedCov.h>
-#include <libsbp_ros_msgs/MsgPosLlh.h>
-#include <eigen3/Eigen/Dense>
-#include <math.h>
-
-class SwiftNavRover{
-public:
-    SwiftNavRover(ros::NodeHandle* node_handle, double la, double lo, double al);
-
-    const double kSemimajorAxis = 6378137.0;
-    const double kSemiminorAxis = 6356752.3142;
-    const double kFirstEccentricitySquared = 6.69437999014 * 0.001;
-    const double kSecondEccentricitySquared = 6.73949674228 * 0.001;
-    const double kFlattening = 1/298.257223563;
-
-    bool satelliteCheck = true;
-
-    float home_lat, home_lon, home_alt;
-    float home_lat_rad, home_lon_rad;
-    typedef Eigen::Matrix<double,3,3> Matrix3x3d;
-    Matrix3x3d ecef_to_ned_matrix;
-
-    ros::NodeHandle nh;
-    
-    ros::Subscriber vel_sub;
-    ros::Subscriber pos_sub;
-    ros::Subscriber pos_llh_sub;
-    ros::Publisher ned_point_fix;
-    ros::Publisher ned_baseline_position_fix;
-    ros::Publisher ned_vel_cov_fix;
-    void init();
-    void publishBaselinePosition(ros::Time t, double n, double e, double d, int tow, boost::array<double, 9> covariance, int n_sats, int fixed_mode);
-    void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
-    void publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode);
-    void baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov::ConstPtr & msg);
-    void posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & msg);
-    void geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down);
-    void geodetic2ecef(double latitude, double longitude, double altitude, double *x, double *y, double *z);
-    void ecef2ned(double x_t, double y_t, double z_t, double* north, double* east, double* down);
-    double deg2rad(double degrees);
-    inline Matrix3x3d nRe(const double lat_radians, const double lon_radians)
-    {
-        const double sLat = sin(lat_radians);
-        const double sLon = sin(lon_radians);
-        const double cLat = cos(lat_radians);
-        const double cLon = cos(lon_radians);        
-        Matrix3x3d ret;
-        ret(0, 0) = -sLat * cLon;
-        ret(0, 1) = -sLat * sLon;
-        ret(0, 2) = cLat;
-        ret(1, 0) = -sLon;
-        ret(1, 1) = cLon;
-        ret(1, 2) = 0.0;
-        ret(2, 0) = cLat * cLon;
-        ret(2, 1) = cLat * sLon;
-        ret(2, 2) = sLat;
-        return ret;
-    }
-};
+#include <converter_node.hpp>
 
 SwiftNavRover::SwiftNavRover(ros::NodeHandle* node_handle, double hla = 0.0, double hlo = 0.0, double hal = 0.0):nh(*node_handle), 
 home_lat(hla), home_lon(hlo), home_alt(hal){
@@ -82,12 +13,16 @@ home_lat(hla), home_lon(hlo), home_alt(hal){
 
 void SwiftNavRover::init()
 {
+    // Subscribers
     vel_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this);
     pos_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);
     pos_llh_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/pos_llh", 1000, &SwiftNavRover::posLLHCallback, this);
+
+    // Publishers
     ned_point_fix = nh.advertise<geometry_msgs::PointStamped>("/rover/ned_point_fix", 1000);
     ned_baseline_position_fix = nh.advertise<gnss_msgs::BaselinePosition>("/rover/ned_baseline_position_fix", 1000);
     ned_vel_cov_fix = nh.advertise<gnss_msgs::BaselineVelocity>("/rover/ned_vel_cov_fix", 1000);
+    rtk_mode_available = nh.advertise<std_msgs::Bool>("/rover/rtk_available", 1000);
 }
 
 void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg)
@@ -104,6 +39,7 @@ void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineN
     ros::Time t = ros::Time::now();
     if(n_sats == 0){
         SwiftNavRover::satelliteCheck = false;
+        SwiftNavRover::publishRTKAvailable(SwiftNavRover::satelliteCheck);
     }
     else
     {
@@ -112,6 +48,7 @@ void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineN
     if(SwiftNavRover::satelliteCheck == true)
     {
         SwiftNavRover::publishBaselinePosition(t,n,e,d,tow,covariance,n_sats,fixed_mode);
+        SwiftNavRover::publishRTKAvailable(SwiftNavRover::satelliteCheck);
     }
 }
 
@@ -194,6 +131,13 @@ void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double
     msg.vel_mode = vel_mode;
     msg.ins_mode = ins_mode;
     ned_vel_cov_fix.publish(msg);
+}
+
+void SwiftNavRover::publishRTKAvailable(bool available)
+{
+    std_msgs::Bool msg;
+    msg.data = available;
+    rtk_mode_available.publish(msg);
 }
 
 void SwiftNavRover::geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down)

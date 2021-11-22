@@ -1,0 +1,85 @@
+#pragma once
+#include "ros/ros.h"
+#include <ros/console.h>
+#include <boost/array.hpp>
+#include <geometry_msgs/PointStamped.h>
+#include <gnss_msgs/BaselinePosition.h>
+#include <gnss_msgs/BaselineVelocity.h>
+#include <geometry_msgs/PointStamped.h>
+#include <piksi_rtk_msgs/BaselineNed.h>
+#include <piksi_rtk_msgs/VelNedCov.h>
+#include <libsbp_ros_msgs/MsgBaselineNed.h>
+#include <libsbp_ros_msgs/MsgVelNedCov.h>
+#include <libsbp_ros_msgs/MsgPosLlh.h>
+#include <eigen3/Eigen/Dense>
+#include <math.h>
+#include <std_msgs/Bool.h>
+
+class SwiftNavRover{
+public:
+    SwiftNavRover(ros::NodeHandle* node_handle, double la, double lo, double al);
+
+    // WGS 84 derived geometric constants
+    const double kSemimajorAxis = 6378137.0;
+    const double kSemiminorAxis = 6356752.3142;
+    const double kFirstEccentricitySquared = 6.69437999014 * 0.001;
+    const double kSecondEccentricitySquared = 6.73949674228 * 0.001;
+    const double kFlattening = 1/298.257223563;
+
+    bool satelliteCheck = true;
+
+    float home_lat, home_lon, home_alt;
+    float home_lat_rad, home_lon_rad;
+    typedef Eigen::Matrix<double,3,3> Matrix3x3d;
+    Matrix3x3d ecef_to_ned_matrix;
+
+    ros::NodeHandle nh;
+    
+    // Declare subscribers
+    ros::Subscriber vel_sub;
+    ros::Subscriber pos_sub;
+    ros::Subscriber pos_llh_sub;
+
+    // Declare publishers
+    ros::Publisher ned_point_fix;
+    ros::Publisher ned_baseline_position_fix;
+    ros::Publisher ned_vel_cov_fix;
+    ros::Publisher rtk_mode_available;
+    
+    void init();
+
+    // Publisher functions
+    void publishBaselinePosition(ros::Time t, double n, double e, double d, int tow, boost::array<double, 9> covariance, int n_sats, int fixed_mode);
+    void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
+    void publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode);
+    void publishRTKAvailable(bool available);
+
+    // Callback functions
+    void baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov::ConstPtr & msg);
+    void posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & msg);
+
+    // Co-ordinate conversions
+    void geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down);
+    void geodetic2ecef(double latitude, double longitude, double altitude, double *x, double *y, double *z);
+    void ecef2ned(double x_t, double y_t, double z_t, double* north, double* east, double* down);
+
+    double deg2rad(double degrees);
+    inline Matrix3x3d nRe(const double lat_radians, const double lon_radians)
+    {
+        const double sLat = sin(lat_radians);
+        const double sLon = sin(lon_radians);
+        const double cLat = cos(lat_radians);
+        const double cLon = cos(lon_radians);        
+        Matrix3x3d ret;
+        ret(0, 0) = -sLat * cLon;
+        ret(0, 1) = -sLat * sLon;
+        ret(0, 2) = cLat;
+        ret(1, 0) = -sLon;
+        ret(1, 1) = cLon;
+        ret(1, 2) = 0.0;
+        ret(2, 0) = cLat * cLon;
+        ret(2, 1) = cLat * sLon;
+        ret(2, 2) = sLat;
+        return ret;
+    }
+};
