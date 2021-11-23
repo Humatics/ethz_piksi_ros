@@ -1,14 +1,14 @@
 #include <converter_node.hpp>
 
 SwiftNavRover::SwiftNavRover(ros::NodeHandle* node_handle, double hla = 0.0, double hlo = 0.0, double hal = 0.0):nh(*node_handle), 
-home_lat(hla), home_lon(hlo), home_alt(hal){
+home_lat_(hla), home_lon_(hlo), home_alt_(hal){
     SwiftNavRover::init();
-    SwiftNavRover::home_lon_rad = SwiftNavRover::deg2rad(home_lon);
-    SwiftNavRover::home_lat_rad = SwiftNavRover::deg2rad(home_lat);
+    SwiftNavRover::home_lon_rad_ = SwiftNavRover::deg2rad(home_lon_);
+    SwiftNavRover::home_lat_rad_ = SwiftNavRover::deg2rad(home_lat_);
     double x,y,z;
-    SwiftNavRover::geodetic2ecef(home_lat, home_lon, home_alt, &x, &y, &z);
+    SwiftNavRover::geodetic2ecef(home_lat_, home_lon_, home_alt_, &x, &y, &z);
     double phip = atan2(z, sqrt(pow(x,2)+pow(y,2)));
-    SwiftNavRover::ecef_to_ned_matrix = SwiftNavRover::nRe(phip, SwiftNavRover::home_lon_rad);
+    SwiftNavRover::ecef_to_ned_matrix = SwiftNavRover::nRe(phip, SwiftNavRover::home_lon_rad_);
 }
 
 void SwiftNavRover::init()
@@ -23,7 +23,7 @@ void SwiftNavRover::init()
     ned_baseline_position_fix_ = nh.advertise<gnss_msgs::BaselinePosition>("/rover/ned_baseline_position_fix", 10);
     ned_vel_cov_fix_ = nh.advertise<gnss_msgs::BaselineVelocity>("/rover/ned_vel_cov_fix", 10);
     rtk_mode_available_ = nh.advertise<std_msgs::Bool>("/rover/rtk_available", 10);
-    diagnostic_publisher_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
+    diagnostic_publisher_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics_rover", 10);
 
     // Timer for diagnostic message publisher
     status_timer_ = nh.createTimer(ros::Duration(1.0), &SwiftNavRover::publishStatus, this);
@@ -40,19 +40,20 @@ void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineN
     boost::array<double, 9> covariance = {{h_accuracy, 0, 0, 0, h_accuracy, 0, 0, 0, v_accuracy}};
     int n_sats = msg->n_sats;
     int fixed_mode = (msg->flags) & (0b00000111);
+    SwiftNavRover::positioning_mode_ = fixed_mode;
     ros::Time t = ros::Time::now();
     if(n_sats == 0){
-        SwiftNavRover::satelliteCheck = false;
-        SwiftNavRover::publishRTKAvailable(SwiftNavRover::satelliteCheck);
+        SwiftNavRover::satellite_check_ = false;
+        SwiftNavRover::publishRTKAvailable();
     }
     else
     {
-        SwiftNavRover::satelliteCheck = true;
+        SwiftNavRover::satellite_check_ = true;
     }
-    if(SwiftNavRover::satelliteCheck == true)
+    if(SwiftNavRover::satellite_check_ == true)
     {
         SwiftNavRover::publishBaselinePosition(t,n,e,d,tow,covariance,n_sats,fixed_mode);
-        SwiftNavRover::publishRTKAvailable(SwiftNavRover::satelliteCheck);
+        SwiftNavRover::publishRTKAvailable();
     }
 }
 
@@ -89,10 +90,11 @@ void SwiftNavRover::posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & 
     int v_accuracy = msg->v_accuracy;
     int tow = msg->tow;
     int fixed_mode = (msg->flags) & (0b00000111);
+    SwiftNavRover::positioning_mode_ = fixed_mode;
     boost::array<double, 9> covariance = {{h_accuracy, 0, 0, 0, h_accuracy, 0, 0, 0, v_accuracy}};
     ros::Time t = ros::Time::now();
     SwiftNavRover::geodetic2ned(lat, lon, height, &n, &e, &d);
-    if(SwiftNavRover::satelliteCheck == false)
+    if(SwiftNavRover::satellite_check_ == false)
     {
         // ROS_INFO_STREAM("Publishing lat-lon converted position");
         SwiftNavRover::publishBaselinePosition(t,n,e,d,tow,covariance,n_sats,fixed_mode);
@@ -137,10 +139,10 @@ void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double
     ned_vel_cov_fix_.publish(msg);
 }
 
-void SwiftNavRover::publishRTKAvailable(bool available)
+void SwiftNavRover::publishRTKAvailable()
 {
     std_msgs::Bool msg;
-    msg.data = available;
+    msg.data = SwiftNavRover::satellite_check_;
     rtk_mode_available_.publish(msg);
 }
 
@@ -149,15 +151,26 @@ void SwiftNavRover::publishStatus(const ros::TimerEvent& event)
     diagnostic_msgs::DiagnosticStatus status;
     status.name = "gnss_driver_node";
     status.hardware_id = "gnss_rover";
-    if(SwiftNavRover::satelliteCheck == false)
+    if(SwiftNavRover::satellite_check_ == false)
     {
         status.level = diagnostic_msgs::DiagnosticStatus::WARN;
-        status.message = "RTK black-out";
+        status.message = "RTK black-out, positioning in SBAS mode";
+    }
+    else if(SwiftNavRover::satellite_check_ == true && SwiftNavRover::positioning_mode_ == 4)
+    {
+        status.level = diagnostic_msgs::DiagnosticStatus::OK;
+        status.message = "Receiving RTK data, positioning in fixed-RTK";
+    }
+    else if(SwiftNavRover::satellite_check_ == true && SwiftNavRover::positioning_mode_ == 3)
+    {
+        status.level = diagnostic_msgs::DiagnosticStatus::OK;
+        status.message = "Receiving RTK data, positioning in float-RTK";
     }
     else
     {
-        status.level = diagnostic_msgs::DiagnosticStatus::OK;
-        status.message = "Receiving RTK data";
+        status.level = diagnostic_msgs::DiagnosticStatus::ERROR;
+        status.message = "No GNSS data available";        
+        
     }
 
     diagnostic_msgs::DiagnosticArray msg;
@@ -188,7 +201,7 @@ void SwiftNavRover::ecef2ned(double x_t, double y_t, double z_t, double* north, 
 {
     Eigen::Vector3d vect, ret;
     double home_ecef_x, home_ecef_y, home_ecef_z;
-    SwiftNavRover::geodetic2ecef(SwiftNavRover::home_lat, SwiftNavRover::home_lon, SwiftNavRover::home_alt, &home_ecef_x, &home_ecef_y, &home_ecef_z);
+    SwiftNavRover::geodetic2ecef(SwiftNavRover::home_lat_, SwiftNavRover::home_lon_, SwiftNavRover::home_alt_, &home_ecef_x, &home_ecef_y, &home_ecef_z);
     vect(0) = x_t - home_ecef_x;
     vect(1) = y_t - home_ecef_y;
     vect(2) = z_t - home_ecef_z;   
