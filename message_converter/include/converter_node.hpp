@@ -15,6 +15,10 @@
 #include <math.h>
 #include <std_msgs/Bool.h>
 
+#include <diagnostic_msgs/DiagnosticArray.h>
+#include <diagnostic_updater/diagnostic_updater.h>
+#include <diagnostic_updater/publisher.h>
+
 class SwiftNavRover{
 public:
     SwiftNavRover(ros::NodeHandle* node_handle, double la, double lo, double al);
@@ -26,6 +30,8 @@ public:
     const double kSecondEccentricitySquared = 6.73949674228 * 0.001;
     const double kFlattening = 1/298.257223563;
 
+    // Flag to check if satellites are visible - if this drops to 0, 
+    // RTK blackout has occured
     bool satelliteCheck = true;
 
     float home_lat, home_lon, home_alt;
@@ -35,17 +41,6 @@ public:
 
     ros::NodeHandle nh;
     
-    // Declare subscribers
-    ros::Subscriber vel_sub;
-    ros::Subscriber pos_sub;
-    ros::Subscriber pos_llh_sub;
-
-    // Declare publishers
-    ros::Publisher ned_point_fix;
-    ros::Publisher ned_baseline_position_fix;
-    ros::Publisher ned_vel_cov_fix;
-    ros::Publisher rtk_mode_available;
-    
     void init();
 
     // Publisher functions
@@ -53,6 +48,7 @@ public:
     void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
     void publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode);
     void publishRTKAvailable(bool available);
+    void publishStatus(const ros::TimerEvent& event);
 
     // Callback functions
     void baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov::ConstPtr & msg);
@@ -82,4 +78,20 @@ public:
         ret(2, 2) = sLat;
         return ret;
     }
+
+    private:
+    // Timer to publish status messages at 1Hz
+    ros::Timer status_timer_;
+
+    // Declare subscribers
+    ros::Subscriber vel_sub_;
+    ros::Subscriber pos_sub_;
+    ros::Subscriber pos_llh_sub_;
+
+    // Declare publishers
+    ros::Publisher ned_point_fix_;
+    ros::Publisher ned_baseline_position_fix_;
+    ros::Publisher ned_vel_cov_fix_;
+    ros::Publisher rtk_mode_available_;
+    ros::Publisher diagnostic_publisher_;
 };

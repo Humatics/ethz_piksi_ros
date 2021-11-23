@@ -14,15 +14,19 @@ home_lat(hla), home_lon(hlo), home_alt(hal){
 void SwiftNavRover::init()
 {
     // Subscribers
-    vel_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this);
-    pos_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);
-    pos_llh_sub = nh.subscribe("/rover/piksi/position_receiver_0/sbp/pos_llh", 1000, &SwiftNavRover::posLLHCallback, this);
+    vel_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this);
+    pos_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);
+    pos_llh_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/pos_llh", 1000, &SwiftNavRover::posLLHCallback, this);
 
     // Publishers
-    ned_point_fix = nh.advertise<geometry_msgs::PointStamped>("/rover/ned_point_fix", 1000);
-    ned_baseline_position_fix = nh.advertise<gnss_msgs::BaselinePosition>("/rover/ned_baseline_position_fix", 1000);
-    ned_vel_cov_fix = nh.advertise<gnss_msgs::BaselineVelocity>("/rover/ned_vel_cov_fix", 1000);
-    rtk_mode_available = nh.advertise<std_msgs::Bool>("/rover/rtk_available", 1000);
+    ned_point_fix_ = nh.advertise<geometry_msgs::PointStamped>("/rover/ned_point_fix", 10);
+    ned_baseline_position_fix_ = nh.advertise<gnss_msgs::BaselinePosition>("/rover/ned_baseline_position_fix", 10);
+    ned_vel_cov_fix_ = nh.advertise<gnss_msgs::BaselineVelocity>("/rover/ned_vel_cov_fix", 10);
+    rtk_mode_available_ = nh.advertise<std_msgs::Bool>("/rover/rtk_available", 10);
+    diagnostic_publisher_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("/diagnostics", 10);
+
+    // Timer for diagnostic message publisher
+    status_timer_ = nh.createTimer(ros::Duration(1.0), &SwiftNavRover::publishStatus, this);
 }
 
 void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg)
@@ -103,7 +107,7 @@ void SwiftNavRover::publishBaselinePosition(ros::Time t,double n,double e,double
     msgPointStamped.point.x = n;
     msgPointStamped.point.y = e;
     msgPointStamped.point.z = d;
-    ned_point_fix.publish(msgPointStamped);
+    ned_point_fix_.publish(msgPointStamped);
     gnss_msgs::BaselinePosition msg;
     msg.header.frame_id = "ned";
     msg.header.stamp = t;
@@ -114,7 +118,7 @@ void SwiftNavRover::publishBaselinePosition(ros::Time t,double n,double e,double
     msg.n_sats = n_sats;
     msg.covariance = covariance;
     msg.mode = fixed_mode;
-    ned_baseline_position_fix.publish(msg);
+    ned_baseline_position_fix_.publish(msg);
 }
 
 void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode)
@@ -130,14 +134,37 @@ void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double
     msg.covariance = covariance;
     msg.vel_mode = vel_mode;
     msg.ins_mode = ins_mode;
-    ned_vel_cov_fix.publish(msg);
+    ned_vel_cov_fix_.publish(msg);
 }
 
 void SwiftNavRover::publishRTKAvailable(bool available)
 {
     std_msgs::Bool msg;
     msg.data = available;
-    rtk_mode_available.publish(msg);
+    rtk_mode_available_.publish(msg);
+}
+
+void SwiftNavRover::publishStatus(const ros::TimerEvent& event)
+{
+    diagnostic_msgs::DiagnosticStatus status;
+    status.name = "gnss_driver_node";
+    status.hardware_id = "gnss_rover";
+    if(SwiftNavRover::satelliteCheck == false)
+    {
+        status.level = diagnostic_msgs::DiagnosticStatus::WARN;
+        status.message = "RTK black-out";
+    }
+    else
+    {
+        status.level = diagnostic_msgs::DiagnosticStatus::OK;
+        status.message = "Receiving RTK data";
+    }
+
+    diagnostic_msgs::DiagnosticArray msg;
+    msg.header.stamp = ros::Time::now();
+    msg.status.push_back(status);
+
+    diagnostic_publisher_.publish(msg);
 }
 
 void SwiftNavRover::geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down)
@@ -169,7 +196,7 @@ void SwiftNavRover::ecef2ned(double x_t, double y_t, double z_t, double* north, 
     *north = ret(0);
     *east = ret(1);
     *down = -ret(2);
-    std::cout << "ecef2ned: " << ret(0)<< " " << ret(1) << " " << -ret(2) << std::endl;    
+    // std::cout << "ecef2ned: " << ret(0)<< " " << ret(1) << " " << -ret(2) << std::endl;    
 }
 
 double SwiftNavRover::deg2rad(double degrees)
