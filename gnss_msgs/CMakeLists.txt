@@ -25,6 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
    BaselinePosition.msg
    BaselineVelocity.msg
    GnssAlongTrackComponent.msg
+   RtkAvailable.msg
  )
 
 ## Generate services in the 'srv' folder

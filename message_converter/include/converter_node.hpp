@@ -5,6 +5,7 @@
 #include <geometry_msgs/PointStamped.h>
 #include <gnss_msgs/BaselinePosition.h>
 #include <gnss_msgs/BaselineVelocity.h>
+#include <gnss_msgs/RtkAvailable.h>
 #include <geometry_msgs/PointStamped.h>
 #include <piksi_rtk_msgs/BaselineNed.h>
 #include <piksi_rtk_msgs/VelNedCov.h>
@@ -30,8 +31,6 @@ public:
     const double kSecondEccentricitySquared = 6.73949674228 * 0.001;
     const double kFlattening = 1/298.257223563;
 
-    // float home_lat, home_lon, home_alt;
-    // float home_lat_rad, home_lon_rad;
     typedef Eigen::Matrix<double,3,3> Matrix3x3d;
     Matrix3x3d ecef_to_ned_matrix;
 
@@ -43,7 +42,7 @@ public:
     void publishBaselinePosition(ros::Time t, double n, double e, double d, int tow, boost::array<double, 9> covariance, int n_sats, int fixed_mode);
     void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
     void publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode);
-    void publishRTKAvailable();
+    void publishRTKAvailable(ros::Time t);
     void publishStatus(const ros::TimerEvent& event);
 
     // Callback functions
