@@ -1,5 +1,7 @@
 #include <converter_node.hpp>
 
+namespace lrm = libsbp_ros_msgs;
+
 SwiftNavRover::SwiftNavRover(ros::NodeHandle* node_handle, double hla = 0.0, double hlo = 0.0, double hal = 0.0):nh(*node_handle), 
 home_lat_(hla), home_lon_(hlo), home_alt_(hal){
     SwiftNavRover::init();
@@ -7,6 +9,7 @@ home_lat_(hla), home_lon_(hlo), home_alt_(hal){
     SwiftNavRover::home_lat_rad_ = SwiftNavRover::deg2rad(home_lat_);
     double x,y,z;
     SwiftNavRover::geodetic2ecef(home_lat_, home_lon_, home_alt_, &x, &y, &z);
+    SwiftNavRover::setHomeECEF(&x, &y, &z);
     double phip = atan2(z, sqrt(pow(x,2)+pow(y,2)));
     SwiftNavRover::ecef_to_ned_matrix = SwiftNavRover::nRe(phip, SwiftNavRover::home_lon_rad_);
 }
@@ -14,8 +17,8 @@ home_lat_(hla), home_lon_(hlo), home_alt_(hal){
 void SwiftNavRover::init()
 {
     // Subscribers
-    vel_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this);
-    pos_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);
+    vel_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this); // /rover/piksi/position_receiver_0/ros/vel_ned_cov
+    pos_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);// /rover/piksi/position_receiver_0/ros/baseline_ned
     pos_llh_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/pos_llh", 1000, &SwiftNavRover::posLLHCallback, this);
 
     // Publishers
@@ -35,13 +38,14 @@ void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineN
     float e = 1e-3*(msg->e);
     float d = 1e-3*(msg->d);
     int tow = msg->tow;
+    ros::Time t = lrm::convertTowToRosTime(tow, 0);
     int h_accuracy = msg->h_accuracy;
     int v_accuracy = msg->v_accuracy;
     boost::array<double, 9> covariance = {{h_accuracy/1000.00, 0, 0, 0, h_accuracy/1000.00, 0, 0, 0, v_accuracy/1000.00}};
     int n_sats = msg->n_sats;
     int fixed_mode = (msg->flags) & (0b00000111);
     SwiftNavRover::positioning_mode_ = fixed_mode;
-    ros::Time t = ros::Time::now();
+    // ros::Time t = ros::Time::now();
     if(n_sats == 0){
         SwiftNavRover::satellite_check_ = false;
         SwiftNavRover::publishRTKAvailable(t);
@@ -63,6 +67,7 @@ void SwiftNavRover::baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov
     float e = 1e-3*(msg->e);
     float d = 1e-3*(msg->d);
     int tow = msg->tow;
+    ros::Time t = lrm::convertTowToRosTime(tow, 18);
     float cov_n_n = msg->cov_n_n;
     float cov_n_e = msg->cov_n_e;
     float cov_n_d = msg->cov_n_d;
@@ -73,7 +78,7 @@ void SwiftNavRover::baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov
     int ins_mode = ((msg->flags) & (0b00011000)) >> 3;
     int vel_mode = (msg->flags) & (0b00000111);
     boost::array<double, 9> covariance = {{cov_n_n,cov_n_e,cov_n_d,cov_n_e,cov_e_e,cov_e_d,cov_n_d,cov_e_d,cov_d_d}};
-    ros::Time t = ros::Time::now();
+    // ros::Time t = ros::Time::now();
     SwiftNavRover::publishBaselineVelocity(t, tow, n, e, d, covariance, n_sats, vel_mode, ins_mode);
 }
 
@@ -89,10 +94,11 @@ void SwiftNavRover::posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & 
     int h_accuracy = msg->h_accuracy;
     int v_accuracy = msg->v_accuracy;
     int tow = msg->tow;
+    ros::Time t = lrm::convertTowToRosTime(tow, 18);
     int fixed_mode = (msg->flags) & (0b00000111);
     SwiftNavRover::positioning_mode_ = fixed_mode;
     boost::array<double, 9> covariance = {{h_accuracy/1000.00, 0, 0, 0, h_accuracy/1000.00, 0, 0, 0, v_accuracy/1000.00}};
-    ros::Time t = ros::Time::now();
+    // ros::Time t = ros::Time::now();
     SwiftNavRover::geodetic2ned(lat, lon, height, &n, &e, &d);
     if(SwiftNavRover::satellite_check_ == false)
     {
@@ -201,21 +207,14 @@ void SwiftNavRover::geodetic2ecef(double latitude, double longitude, double alti
 void SwiftNavRover::ecef2ned(double x_t, double y_t, double z_t, double* north, double* east, double* down)
 {
     Eigen::Vector3d vect, ret;
-    double home_ecef_x, home_ecef_y, home_ecef_z;
-    SwiftNavRover::geodetic2ecef(SwiftNavRover::home_lat_, SwiftNavRover::home_lon_, SwiftNavRover::home_alt_, &home_ecef_x, &home_ecef_y, &home_ecef_z);
-    vect(0) = x_t - home_ecef_x;
-    vect(1) = y_t - home_ecef_y;
-    vect(2) = z_t - home_ecef_z;   
+    vect(0) = x_t - SwiftNavRover::home_ecef_x_;
+    vect(1) = y_t - SwiftNavRover::home_ecef_y_;
+    vect(2) = z_t - SwiftNavRover::home_ecef_z_;   
     ret = SwiftNavRover::ecef_to_ned_matrix * vect;
     *north = ret(0);
     *east = ret(1);
     *down = -ret(2);
     // std::cout << "ecef2ned: " << ret(0)<< " " << ret(1) << " " << -ret(2) << std::endl;    
-}
-
-double SwiftNavRover::deg2rad(double degrees)
-{
-    return (degrees / 180.0) * M_PI;
 }
 
 int main(int argc, char **argv)
@@ -229,8 +228,16 @@ int main(int argc, char **argv)
     // Values in comments are from the parking lot test
     // double home_latitude = 42.3711071377; 
     // double home_longitude = -71.2168400352; 
-    // double home_altitude = -15.3775837652;     
+    // double home_altitude = -15.3775837652;
+    // double home_latitude = 40.8502544178; 
+    // double home_longitude = 14.3080716592; 
+    // double home_altitude = 77.7699139992;     
     SwiftNavRover obj(&n, home_latitude, home_longitude, home_altitude);
-    ros::spin();
+    ros::Rate loop_rate(10);
+    while(ros::ok())
+    {
+        ros::spinOnce();
+        loop_rate.sleep();
+    }
     return 0;
 }

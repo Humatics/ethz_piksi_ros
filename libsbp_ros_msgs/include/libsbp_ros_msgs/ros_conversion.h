@@ -4,7 +4,7 @@
 #include <libsbp/navigation.h>
 #include <ros/assert.h>
 #include <ros/time.h>
-#include <Eigen/Dense>
+#include <eigen3/Eigen/Dense>
 
 // Manually implemented ROS conversions.
 namespace libsbp_ros_msgs {

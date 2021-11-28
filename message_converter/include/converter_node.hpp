@@ -20,6 +20,8 @@
 #include <diagnostic_updater/diagnostic_updater.h>
 #include <diagnostic_updater/publisher.h>
 
+#include "libsbp_ros_msgs/ros_conversion.h"
+
 class SwiftNavRover{
 public:
     SwiftNavRover(ros::NodeHandle* node_handle, double la, double lo, double al);
@@ -40,7 +42,7 @@ public:
 
     // Publisher functions
     void publishBaselinePosition(ros::Time t, double n, double e, double d, int tow, boost::array<double, 9> covariance, int n_sats, int fixed_mode);
-    void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
+    
     void publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode);
     void publishRTKAvailable(ros::Time t);
     void publishStatus(const ros::TimerEvent& event);
@@ -48,13 +50,27 @@ public:
     // Callback functions
     void baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov::ConstPtr & msg);
     void posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & msg);
+    void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
+    // void baselinePositionCallback(const piksi_rtk_msgs::PositionWithCovarianceStamped msg);
 
     // Co-ordinate conversions
     void geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down);
     void geodetic2ecef(double latitude, double longitude, double altitude, double *x, double *y, double *z);
     void ecef2ned(double x_t, double y_t, double z_t, double* north, double* east, double* down);
 
-    double deg2rad(double degrees);
+    // Setters
+    void setHomeECEF(double* x, double* y, double* z)
+    {
+        home_ecef_x_ = *x;
+        home_ecef_y_ = *y;
+        home_ecef_z_ = *z;
+    }
+
+    inline double deg2rad(double degrees)
+    {
+        return (degrees / 180.0) * M_PI;
+    }
+
     inline Matrix3x3d nRe(const double lat_radians, const double lon_radians)
     {
         const double sLat = sin(lat_radians);
@@ -78,7 +94,8 @@ public:
     // Timer to publish status messages at 1Hz
     ros::Timer status_timer_;
 
-    float home_lat_, home_lon_, home_alt_;
+    double home_lat_, home_lon_, home_alt_;
+    double home_ecef_x_, home_ecef_y_, home_ecef_z_;
     float home_lat_rad_, home_lon_rad_;
 
     // Declare subscribers
