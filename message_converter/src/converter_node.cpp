@@ -17,9 +17,10 @@ home_lat_(hla), home_lon_(hlo), home_alt_(hal){
 void SwiftNavRover::init()
 {
     // Subscribers
-    vel_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this); // /rover/piksi/position_receiver_0/ros/vel_ned_cov
-    pos_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);// /rover/piksi/position_receiver_0/ros/baseline_ned
+    vel_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/vel_ned_cov", 1000, &SwiftNavRover::baselineVelocityCallback, this); 
+    pos_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/baseline_ned", 1000, &SwiftNavRover::baselinePositionCallback, this);
     pos_llh_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/pos_llh", 1000, &SwiftNavRover::posLLHCallback, this);
+    gps_time_sub_ = nh.subscribe("/rover/piksi/position_receiver_0/sbp/gps_time", 1000, &SwiftNavRover::gpsTimeCallback, this);
 
     // Publishers
     ned_point_fix_ = nh.advertise<geometry_msgs::PointStamped>("/rover/ned_point_fix", 10);
@@ -38,14 +39,13 @@ void SwiftNavRover::baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineN
     float e = 1e-3*(msg->e);
     float d = 1e-3*(msg->d);
     int tow = msg->tow;
-    ros::Time t = lrm::convertTowToRosTime(tow, 0);
+    ros::Time t = lrm::convertGpsTimeToUtcRosTime(SwiftNavRover::week_, tow, SwiftNavRover::residual_, SwiftNavRover::leap_seconds_);
     int h_accuracy = msg->h_accuracy;
     int v_accuracy = msg->v_accuracy;
     boost::array<double, 9> covariance = {{h_accuracy/1000.00, 0, 0, 0, h_accuracy/1000.00, 0, 0, 0, v_accuracy/1000.00}};
     int n_sats = msg->n_sats;
     int fixed_mode = (msg->flags) & (0b00000111);
     SwiftNavRover::positioning_mode_ = fixed_mode;
-    // ros::Time t = ros::Time::now();
     if(n_sats == 0){
         SwiftNavRover::satellite_check_ = false;
         SwiftNavRover::publishRTKAvailable(t);
@@ -67,7 +67,7 @@ void SwiftNavRover::baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov
     float e = 1e-3*(msg->e);
     float d = 1e-3*(msg->d);
     int tow = msg->tow;
-    ros::Time t = lrm::convertTowToRosTime(tow, 18);
+    ros::Time t = lrm::convertGpsTimeToUtcRosTime(SwiftNavRover::week_, tow, SwiftNavRover::residual_, SwiftNavRover::leap_seconds_);
     float cov_n_n = msg->cov_n_n;
     float cov_n_e = msg->cov_n_e;
     float cov_n_d = msg->cov_n_d;
@@ -78,7 +78,6 @@ void SwiftNavRover::baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov
     int ins_mode = ((msg->flags) & (0b00011000)) >> 3;
     int vel_mode = (msg->flags) & (0b00000111);
     boost::array<double, 9> covariance = {{cov_n_n,cov_n_e,cov_n_d,cov_n_e,cov_e_e,cov_e_d,cov_n_d,cov_e_d,cov_d_d}};
-    // ros::Time t = ros::Time::now();
     SwiftNavRover::publishBaselineVelocity(t, tow, n, e, d, covariance, n_sats, vel_mode, ins_mode);
 }
 
@@ -94,11 +93,10 @@ void SwiftNavRover::posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & 
     int h_accuracy = msg->h_accuracy;
     int v_accuracy = msg->v_accuracy;
     int tow = msg->tow;
-    ros::Time t = lrm::convertTowToRosTime(tow, 18);
+    ros::Time t = lrm::convertGpsTimeToUtcRosTime(SwiftNavRover::week_, tow, SwiftNavRover::residual_, SwiftNavRover::leap_seconds_);
     int fixed_mode = (msg->flags) & (0b00000111);
     SwiftNavRover::positioning_mode_ = fixed_mode;
     boost::array<double, 9> covariance = {{h_accuracy/1000.00, 0, 0, 0, h_accuracy/1000.00, 0, 0, 0, v_accuracy/1000.00}};
-    // ros::Time t = ros::Time::now();
     SwiftNavRover::geodetic2ned(lat, lon, height, &n, &e, &d);
     if(SwiftNavRover::satellite_check_ == false)
     {
@@ -107,7 +105,16 @@ void SwiftNavRover::posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & 
     }    
 }
 
-void SwiftNavRover::publishBaselinePosition(ros::Time t,double n,double e,double d,int tow,boost::array<double, 9> covariance,int n_sats,int fixed_mode)
+void SwiftNavRover::gpsTimeCallback(const libsbp_ros_msgs::MsgGpsTime::ConstPtr & msg)
+{
+    int wn = msg->wn;
+    SwiftNavRover::week_ = wn;
+    int tow = msg->tow;
+    int residual = msg->ns_residual;
+    SwiftNavRover::residual_ = residual;
+}
+
+void SwiftNavRover::publishBaselinePosition(ros::Time& t,double n,double e,double d,int tow,boost::array<double, 9>& covariance,int n_sats,int fixed_mode)
 {
     geometry_msgs::PointStamped msgPointStamped;
     msgPointStamped.header.frame_id = "ned";
@@ -129,7 +136,7 @@ void SwiftNavRover::publishBaselinePosition(ros::Time t,double n,double e,double
     ned_baseline_position_fix_.publish(msg);
 }
 
-void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode)
+void SwiftNavRover::publishBaselineVelocity(ros::Time& t, int tow,double n,double e,double d,boost::array<double, 9>& covariance,int n_sats,int vel_mode,int ins_mode)
 {
     gnss_msgs::BaselineVelocity msg;
     msg.header.frame_id = "ned";
@@ -145,7 +152,7 @@ void SwiftNavRover::publishBaselineVelocity(ros::Time t, int tow,double n,double
     ned_vel_cov_fix_.publish(msg);
 }
 
-void SwiftNavRover::publishRTKAvailable(ros::Time t)
+void SwiftNavRover::publishRTKAvailable(ros::Time& t)
 {
     gnss_msgs::RtkAvailable msg;
     msg.header.stamp = t;
@@ -213,8 +220,7 @@ void SwiftNavRover::ecef2ned(double x_t, double y_t, double z_t, double* north, 
     ret = SwiftNavRover::ecef_to_ned_matrix * vect;
     *north = ret(0);
     *east = ret(1);
-    *down = -ret(2);
-    // std::cout << "ecef2ned: " << ret(0)<< " " << ret(1) << " " << -ret(2) << std::endl;    
+    *down = -ret(2);    
 }
 
 int main(int argc, char **argv)

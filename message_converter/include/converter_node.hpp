@@ -12,6 +12,7 @@
 #include <libsbp_ros_msgs/MsgBaselineNed.h>
 #include <libsbp_ros_msgs/MsgVelNedCov.h>
 #include <libsbp_ros_msgs/MsgPosLlh.h>
+#include <libsbp_ros_msgs/MsgGpsTime.h>
 #include <eigen3/Eigen/Dense>
 #include <math.h>
 #include <std_msgs/Bool.h>
@@ -41,18 +42,17 @@ public:
     void init();
 
     // Publisher functions
-    void publishBaselinePosition(ros::Time t, double n, double e, double d, int tow, boost::array<double, 9> covariance, int n_sats, int fixed_mode);
-    
-    void publishBaselineVelocity(ros::Time t, int tow,double n,double e,double d,boost::array<double, 9> covariance,int n_sats,int vel_mode,int ins_mode);
-    void publishRTKAvailable(ros::Time t);
+    void publishBaselinePosition(ros::Time& t, double n, double e, double d, int tow, boost::array<double, 9>& covariance, int n_sats, int fixed_mode);    
+    void publishBaselineVelocity(ros::Time& t, int tow,double n,double e,double d,boost::array<double, 9>& covariance,int n_sats,int vel_mode,int ins_mode);
+    void publishRTKAvailable(ros::Time& t);
     void publishStatus(const ros::TimerEvent& event);
 
     // Callback functions
     void baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov::ConstPtr & msg);
     void posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & msg);
     void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
-    // void baselinePositionCallback(const piksi_rtk_msgs::PositionWithCovarianceStamped msg);
-
+    void gpsTimeCallback(const libsbp_ros_msgs::MsgGpsTime::ConstPtr & msg);
+    
     // Co-ordinate conversions
     void geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down);
     void geodetic2ecef(double latitude, double longitude, double altitude, double *x, double *y, double *z);
@@ -64,7 +64,7 @@ public:
         home_ecef_x_ = *x;
         home_ecef_y_ = *y;
         home_ecef_z_ = *z;
-    }
+    }    
 
     inline double deg2rad(double degrees)
     {
@@ -102,6 +102,7 @@ public:
     ros::Subscriber vel_sub_;
     ros::Subscriber pos_sub_;
     ros::Subscriber pos_llh_sub_;
+    ros::Subscriber gps_time_sub_;
 
     // Declare publishers
     ros::Publisher ned_point_fix_;
@@ -113,11 +114,18 @@ public:
     // Flag to check if satellites are visible - if this drops to 0, 
     // RTK blackout has occured. If false, it means that RTK blackout 
     // has occured
-    bool satellite_check_ = true;
+    bool satellite_check_ = false;
     
     // Variable to store the operation mode of the rover - float RTK,
     // fix-RTK, SBAS, etc
     int positioning_mode_;
+
+    // /gps_time converted to UNIX time stamp
+    ros::Time convertedTime_;
+
+    int week_;
+    int residual_;
+    int leap_seconds_ = 18;
 
 
 };
