@@ -39,23 +39,93 @@ public:
 
     ros::NodeHandle nh;
     
+    /**
+     * Initialize the publishers and subscribers for the ROS node
+     * @param 
+     * @return 
+     */
     void init();
 
     // Publisher functions
-    void publishBaselinePosition(ros::Time& t, double n, double e, double d, int tow, boost::array<double, 9>& covariance, int n_sats, int fixed_mode);    
+    /**
+     * Publish the baseline position (NED), with mesage type gnss_msgs/BaselinePosition
+     * @param fields of the gnss_msgs/BaselinePosition message type
+     * @return void
+     */
+    void publishBaselinePosition(ros::Time& t, double n, double e, double d, int tow, boost::array<double, 9>& covariance, int n_sats, int fixed_mode);   
+
+    /**
+     * Publish the baseline velocity, with mesage type gnss_msgs/BaselineVelocity
+     * @param fields of the gnss_msgs/BaselineVelocity message type
+     * @return 
+     */ 
     void publishBaselineVelocity(ros::Time& t, int tow,double n,double e,double d,boost::array<double, 9>& covariance,int n_sats,int vel_mode,int ins_mode);
+
+    /**
+     * Publish the availability of RTK positioning, as a boolean
+     * @param ROS timestamp
+     * @return 
+     */ 
     void publishRTKAvailable(ros::Time& t);
+
+    /**
+     * Publish the diagnostic information of the GNSS driver
+     * @param ROS timer
+     * @return 
+     */ 
     void publishStatus(const ros::TimerEvent& event);
 
+
     // Callback functions
+    /**
+     * Callback function when message of type libsbp_ros_msgs/MsgVelNedCov is published
+     * @param pointer to the message
+     * @return 
+     */
     void baselineVelocityCallback(const libsbp_ros_msgs::MsgVelNedCov::ConstPtr & msg);
+
+    /**
+     * Callback function when message of type libsbp_ros_msgs/MsgPosLlh is published
+     * @param pointer to the message
+     * @return 
+     */
     void posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & msg);
+
+    /**
+     * Callback function when message of type libsbp_ros_msgs/MsgBaselineNed is published
+     * @param pointer to the message
+     * @return 
+     */
     void baselinePositionCallback(const libsbp_ros_msgs::MsgBaselineNed::ConstPtr & msg);
+
+    /**
+     * Callback function when message of type libsbp_ros_msgs/MsgGpsTime is published
+     * @param pointer to the message
+     * @return 
+     */
     void gpsTimeCallback(const libsbp_ros_msgs::MsgGpsTime::ConstPtr & msg);
+
     
     // Co-ordinate conversions
+    /**
+     * Convert geodetic frame position (LLH) to NED coordinates
+     * @param LLH position, and pointer to the NED position variables
+     * @return 
+     */
     void geodetic2ned(double latitude, double longitude, double altitude, double* north, double* east, double* down);
+
+    /**
+     * Convert geodetic frame position (LLH) to ECEF coordinates
+     * @param LLH position, and pointer to the ECEF position variables
+     * @return 
+     */
     void geodetic2ecef(double latitude, double longitude, double altitude, double *x, double *y, double *z);
+
+    /**
+     * Convert ECEF coordinates to NED coordinates
+     * @param ECEF position, and pointer to the NED position variables
+     * @return 
+     */
     void ecef2ned(double x_t, double y_t, double z_t, double* north, double* east, double* down);
 
     // Setters
@@ -66,6 +136,7 @@ public:
         home_ecef_z_ = *z;
     }    
 
+    // Utility functions
     inline double deg2rad(double degrees)
     {
         return (degrees / 180.0) * M_PI;

@@ -231,15 +231,8 @@ int main(int argc, char **argv)
     n.getParam("/home_latitude", home_latitude);
     n.getParam("/home_longitude", home_longitude);
     n.getParam("/home_altitude", home_altitude);
-    // Values in comments are from the parking lot test
-    // double home_latitude = 42.3711071377; 
-    // double home_longitude = -71.2168400352; 
-    // double home_altitude = -15.3775837652;
-    // double home_latitude = 40.8502544178; 
-    // double home_longitude = 14.3080716592; 
-    // double home_altitude = 77.7699139992;     
     SwiftNavRover obj(&n, home_latitude, home_longitude, home_altitude);
-    ros::Rate loop_rate(10);
+    ros::Rate loop_rate(25);
     while(ros::ok())
     {
         ros::spinOnce();
