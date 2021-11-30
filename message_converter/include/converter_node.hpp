@@ -167,7 +167,7 @@ public:
 
     double home_lat_, home_lon_, home_alt_;
     double home_ecef_x_, home_ecef_y_, home_ecef_z_;
-    float home_lat_rad_, home_lon_rad_;
+    double home_lat_rad_, home_lon_rad_;
 
     // Declare subscribers
     ros::Subscriber vel_sub_;
@@ -197,6 +197,4 @@ public:
     int week_;
     int residual_;
     int leap_seconds_ = 18;
-
-
 };

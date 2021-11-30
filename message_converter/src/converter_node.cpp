@@ -99,8 +99,7 @@ void SwiftNavRover::posLLHCallback(const libsbp_ros_msgs::MsgPosLlh::ConstPtr & 
     boost::array<double, 9> covariance = {{h_accuracy/1000.00, 0, 0, 0, h_accuracy/1000.00, 0, 0, 0, v_accuracy/1000.00}};
     SwiftNavRover::geodetic2ned(lat, lon, height, &n, &e, &d);
     if(SwiftNavRover::satellite_check_ == false)
-    {
-        ROS_INFO_STREAM("Publishing lat-lon converted position");
+    {        
         SwiftNavRover::publishBaselinePosition(t,n,e,d,tow,covariance,n_sats,fixed_mode);
     }    
 }
