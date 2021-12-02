@@ -1,0 +1,3 @@
+[submodule "le_msgs"]
+	path = le_msgs
+	url = https://github.com/Humatics/le_msgs.git
